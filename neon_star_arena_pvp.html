@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Star Arena - 실시간 1:1 PVP 멀티플레이어</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <!-- Tone.js (효과음) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050814;
+            color: #ffffff;
+            font-family: 'Noto Sans KR', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .font-cyber {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .neon-text-cyan {
+            text-shadow: 0 0 10px rgba(34, 211, 238, 0.8), 0 0 20px rgba(34, 211, 238, 0.5);
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 10px rgba(244, 114, 182, 0.8), 0 0 20px rgba(244, 114, 182, 0.5);
+        }
+        .neon-box {
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.25), inset 0 0 15px rgba(34, 211, 238, 0.15);
+            border: 1px solid rgba(34, 211, 238, 0.4);
+        }
+        .btn-cyber {
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            box-shadow: 0 0 18px rgba(6, 182, 212, 0.5);
+            transition: all 0.2s ease;
+        }
+        .btn-cyber:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 0 28px rgba(6, 182, 212, 0.85);
+        }
+        .btn-cyber:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-pink {
+            background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+            box-shadow: 0 0 18px rgba(236, 72, 153, 0.5);
+            transition: all 0.2s ease;
+        }
+        .btn-pink:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 0 28px rgba(236, 72, 153, 0.85);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-between relative">
+
+    <!-- 상단 HUD (게임 진행 중에만 표시) -->
+    <header id="gameHud" class="hidden w-full p-3 sm:p-5 flex justify-between items-center z-20 pointer-events-none">
+        <!-- 내 상태 (하단 함선) -->
+        <div class="flex flex-col gap-1 bg-slate-900/70 px-3 py-2 rounded-xl border border-cyan-500/30 backdrop-blur-sm">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span id="myHudName" class="text-xs sm:text-sm text-cyan-300 font-bold truncate max-w-[100px] sm:max-w-[140px]">나</span>
+            </div>
+            <div class="w-28 sm:w-44 h-2.5 sm:h-3.5 bg-slate-950 rounded-full overflow-hidden border border-cyan-500/40 p-0.5">
+                <div id="myHpBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full transition-all duration-150" style="width: 100%;"></div>
+            </div>
+        </div>
+
+        <!-- 방 코드 및 나가기 버튼 -->
+        <div class="flex flex-col items-center gap-1 pointer-events-auto">
+            <div class="px-3 py-1 rounded-full bg-slate-900/80 border border-slate-700 text-xs font-cyber text-slate-300">
+                ROOM <span id="hudRoomCode" class="text-amber-400 font-bold">----</span>
+            </div>
+            <button id="leaveMatchBtn" class="text-[11px] text-slate-400 hover:text-pink-400 underline cursor-pointer">
+                대결 나가기
+            </button>
+        </div>
+
+        <!-- 상대방 상태 (상단 함선) -->
+        <div class="flex flex-col items-end gap-1 bg-slate-900/70 px-3 py-2 rounded-xl border border-pink-500/30 backdrop-blur-sm">
+            <div class="flex items-center gap-2">
+                <span id="oppHudName" class="text-xs sm:text-sm text-pink-300 font-bold truncate max-w-[100px] sm:max-w-[140px]">상대방</span>
+                <span class="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse"></span>
+            </div>
+            <div class="w-28 sm:w-44 h-2.5 sm:h-3.5 bg-slate-950 rounded-full overflow-hidden border border-pink-500/40 p-0.5">
+                <div id="oppHpBar" class="h-full bg-gradient-to-l from-pink-500 to-purple-500 rounded-full transition-all duration-150 ml-auto" style="width: 100%;"></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 게임 캔버스 -->
+    <main class="absolute inset-0 w-full h-full z-10">
+        <canvas id="gameCanvas"></canvas>
+    </main>
+
+    <!-- 로비 화면 (방 만들기 / 참여하기 / 온라인 리더보드) -->
+    <div id="lobbyScreen" class="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 overflow-y-auto">
+        <div class="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-12 gap-5 my-auto">
+            
+            <!-- 왼쪽: 멀티플레이 매치메이킹 패널 (7칸) -->
+            <div class="lg:col-span-7 bg-slate-900/95 neon-box rounded-3xl p-6 sm:p-8 flex flex-col justify-between gap-5">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-xs font-cyber tracking-widest">
+                            REAL-TIME 1:1 PVP
+                        </span>
+                        <span id="connectionStatus" class="text-xs text-amber-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> 서버 연결 중...
+                        </span>
+                    </div>
+                    <h1 class="text-3xl sm:text-4xl font-black font-cyber text-white neon-text-cyan">
+                        NEON STAR <span class="text-pink-400 neon-text-pink">ARENA</span>
+                    </h1>
+                    <p class="text-slate-400 text-xs sm:text-sm mt-1">
+                        다른 기기(PC/모바일)와 방 코드를 공유하여 실시간 우주 대전을 펼치고 명예의 전당에 이름을 등록하세요!
+                    </p>
+                </div>
+
+                <!-- 닉네임 설정 -->
+                <div class="bg-slate-950/70 p-4 rounded-2xl border border-slate-800">
+                    <label class="block text-xs text-cyan-400 font-bold mb-1.5">파일럿 닉네임 (온라인 기록 등록용)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="nicknameInput" maxlength="12" placeholder="닉네임 입력 (최대 12자)" 
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400 transition">
+                    </div>
+                    <div class="mt-2 flex justify-between items-center text-[11px] text-slate-500">
+                        <span>내 ID: <span id="userIdDisplay" class="font-mono text-slate-400">인증 대기중...</span></span>
+                        <span id="myStatsDisplay" class="text-cyan-400 font-bold">0승 0패</span>
+                    </div>
+                </div>
+
+                <!-- 방 만들기 / 방 참여하기 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- 방 생성 -->
+                    <div class="bg-slate-950/60 p-4 rounded-2xl border border-cyan-500/30 flex flex-col justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-cyan-300">새 대전방 만들기</h3>
+                            <p class="text-xs text-slate-400 mt-1">방 코드를 생성하고 친구를 초대합니다.</p>
+                        </div>
+                        <button id="createRoomBtn" disabled class="w-full py-3 rounded-xl btn-cyber text-white font-bold text-sm font-cyber tracking-wider cursor-pointer">
+                            CREATE ROOM
+                        </button>
+                    </div>
+
+                    <!-- 방 참여 -->
+                    <div class="bg-slate-950/60 p-4 rounded-2xl border border-pink-500/30 flex flex-col justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-pink-300">코드로 방 참여하기</h3>
+                            <input type="text" id="roomCodeInput" maxlength="4" placeholder="4자리 코드 입력" 
+                                class="mt-2 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center font-cyber text-lg tracking-widest uppercase text-white focus:outline-none focus:border-pink-400">
+                        </div>
+                        <button id="joinRoomBtn" disabled class="w-full py-3 rounded-xl btn-pink text-white font-bold text-sm font-cyber tracking-wider cursor-pointer">
+                            JOIN ROOM
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 대기실 상태 패널 (방 생성 후 상대 대기 시 표시) -->
+                <div id="waitingPanel" class="hidden bg-cyan-950/40 border border-cyan-400/50 rounded-2xl p-4 text-center flex flex-col items-center gap-2">
+                    <div class="text-xs text-cyan-300 font-bold">상대방 접속 대기 중... 다른 기기에서 아래 코드를 입력하세요!</div>
+                    <div class="flex items-center gap-3 my-1">
+                        <span id="createdRoomCode" class="text-3xl sm:text-4xl font-black font-cyber tracking-widest text-amber-400">----</span>
+                        <button id="copyCodeBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-cyan-300 border border-cyan-500/40 cursor-pointer">
+                            코드 복사
+                        </button>
+                    </div>
+                    <button id="cancelRoomBtn" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">방 취소하기</button>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 온라인 명예의 전당 & 전적 등록 (5칸) -->
+            <div class="lg:col-span-5 bg-slate-900/95 neon-box rounded-3xl p-6 flex flex-col justify-between gap-4">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-lg sm:text-xl font-black font-cyber text-amber-400 flex items-center gap-2">
+                            <span>🏆</span> HALL OF FAME
+                        </h2>
+                        <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            실시간 랭킹
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">
+                        PVP 승리 시 승점이 누적되며, 아래 버튼을 눌러 현재 내 닉네임과 전적을 명예의 전당에 등록/갱신할 수 있습니다.
+                    </p>
+
+                    <!-- 랭킹 리스트 -->
+                    <div id="leaderboardList" class="bg-slate-950/80 rounded-2xl border border-slate-800 p-3 h-56 sm:h-64 overflow-y-auto flex flex-col gap-2">
+                        <div class="text-center text-slate-500 text-xs py-10">랭킹 데이터를 불러오는 중...</div>
+                    </div>
+                </div>
+
+                <!-- 수동 데이터 등록/갱신 버튼 -->
+                <button id="registerScoreBtn" disabled class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm shadow-lg transition cursor-pointer disabled:opacity-50">
+                    내 전적 웹에 등록 / 갱신하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 매치 결과 오버레이 -->
+    <div id="resultScreen" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+        <div class="max-w-md w-full bg-slate-900/95 neon-box rounded-3xl p-6 sm:p-8 text-center flex flex-col items-center gap-5">
+            <div id="resultBadge" class="px-4 py-1 rounded-full text-xs font-cyber tracking-widest font-bold">
+                MATCH FINISHED
+            </div>
+            <h2 id="resultTitle" class="text-4xl sm:text-5xl font-black font-cyber">
+                VICTORY!
+            </h2>
+            <p id="resultDesc" class="text-slate-300 text-sm">
+                상대방의 함선을 격파했습니다! 온라인 전적에 1승이 자동 등록되었습니다.
+            </p>
+
+            <div class="w-full bg-slate-950/70 rounded-2xl p-4 border border-slate-800 flex justify-around items-center">
+                <div class="flex flex-col">
+                    <span class="text-xs text-slate-400">누적 승리</span>
+                    <span id="resultWins" class="text-2xl font-black font-cyber text-cyan-400">0</span>
+                </div>
+                <div class="h-8 w-px bg-slate-800"></div>
+                <div class="flex flex-col">
+                    <span class="text-xs text-slate-400">누적 패배</span>
+                    <span id="resultLosses" class="text-2xl font-black font-cyber text-pink-400">0</span>
+                </div>
+            </div>
+
+            <button id="backToLobbyBtn" class="w-full py-3.5 rounded-2xl btn-cyber text-white font-black text-base font-cyber tracking-wider cursor-pointer">
+                로비로 돌아가기
+            </button>
+        </div>
+    </div>
+
+    <!-- 알림 토스트 메시지 -->
+    <div id="toastMessage" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-opacity duration-300">
+        <div id="toastBox" class="px-5 py-2.5 rounded-full bg-slate-900/95 border border-cyan-400 text-cyan-200 font-bold text-xs sm:text-sm shadow-2xl">
+            알림 메시지
+        </div>
+    </div>
+
+    <!-- Firebase SDK & 게임 로직 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =========================================================================
+        // ★ [GitHub Pages 배포용 설정] ★
+        // GitHub에 올리실 때는 아래의 'YOUR_...' 부분을 본인의 Firebase 설정값으로 교체하세요!
+        // =========================================================================
+        const manualFirebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // 1. Firebase 초기화 및 인증 설정 (미리보기 환경과 GitHub 호스팅 모두 자동 지원)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'neon-star-pvp-github';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : (manualFirebaseConfig.apiKey !== "YOUR_API_KEY" ? manualFirebaseConfig : null);
+        
+        let app, auth, db;
+        let currentUser = null;
+        let userId = null;
+
+        // 플레이어 전적 상태
+        let myStats = {
+            nickname: 'Pilot_' + Math.floor(1000 + Math.random() * 9000),
+            wins: 0,
+            losses: 0,
+            points: 0
+        };
+
+        // DOM 요소
+        const nicknameInput = document.getElementById('nicknameInput');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const myStatsDisplay = document.getElementById('myStatsDisplay');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        const roomCodeInput = document.getElementById('roomCodeInput');
+        const waitingPanel = document.getElementById('waitingPanel');
+        const createdRoomCode = document.getElementById('createdRoomCode');
+        const copyCodeBtn = document.getElementById('copyCodeBtn');
+        const cancelRoomBtn = document.getElementById('cancelRoomBtn');
+        const leaderboardList = document.getElementById('leaderboardList');
+        const registerScoreBtn = document.getElementById('registerScoreBtn');
+
+        const lobbyScreen = document.getElementById('lobbyScreen');
+        const gameHud = document.getElementById('gameHud');
+        const resultScreen = document.getElementById('resultScreen');
+        const myHudName = document.getElementById('myHudName');
+        const oppHudName = document.getElementById('oppHudName');
+        const myHpBar = document.getElementById('myHpBar');
+        const oppHpBar = document.getElementById('oppHpBar');
+        const hudRoomCode = document.getElementById('hudRoomCode');
